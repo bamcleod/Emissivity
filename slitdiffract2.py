@@ -6,7 +6,7 @@
 
 
 import warnings
-import pyfits
+import astropy.io.fits as pyfits
 import numpy as np
 from numpy import *
 from matplotlib import pylab
