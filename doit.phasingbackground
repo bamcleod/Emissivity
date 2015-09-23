@@ -1,0 +1,18 @@
+< atmo_tel.results row 'wave>900 && wave<2500' |
+pivottable -bin wave -:900.:2500.:10. -- -mean sky -mean tel |
+compute '.InPupil=0.82*0.80*sky_Mean + tel_Mean*0.18*0.80;.OutPupil=tel_Mean*0.80' |
+compute '.wave_Bin-=0.005' | 
+column -a tel_Mean=bb_Mean | 
+tee phasingbkg.tab |
+plottable wave_Bin,InPupil color red wave_Bin,OutPupil color blue ytitle "photons/sec/arcsec^2/nm/m^2" device ps > phasingbkg.ps
+
+echo "K-band background counts /m^2/arcsec^2/sec"
+< phasingbkg.tab row 'wave_Bin>2000 && wave_Bin<2320' | statstable | row 'Stat=="Mean"' | compute 'InPupil *=320;OutPupil*=320' | column InPupil OutPupil
+
+echo "H-band background counts /m^2/arcsec^2/sec"
+< phasingbkg.tab row 'wave_Bin>1500 && wave_Bin<1800' | statstable | row 'Stat=="Mean"' | compute 'InPupil*=300;OutPupil*=300' | column InPupil OutPupil
+
+echo "J-band background counts /m^2/arcsec^2/sec"
+< phasingbkg.tab row 'wave_Bin>1150 && wave_Bin<1350' | statstable | row 'Stat=="Mean"' | compute 'InPupil*=200;OutPupil*=200' | column InPupil OutPupil
+
+
