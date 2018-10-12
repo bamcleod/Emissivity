@@ -29,6 +29,8 @@ m2skirtwidth = 0.0005*8.4 # Width of high-emissivity annulus surrounding M2 segm
 m2cyloff     = 0.126*8.4 # Apparent offset of top m2 cylindrical volume
 m2topcyloff  = 0.446*8.4 # Apparent offset of top m2 cylindrical volume
 
+m2cyloff2017 = 150./450.*m2cyloff # Height of M2 is 150mm instead of 450mm (measured with ruler on drawing)
+
 #
 # Get the options off the command line
 #
@@ -280,7 +282,7 @@ for fldang in fldlist:
     elif m2type=="round2017": # Round baffle with diameter 3308.2;  From non-segmented Zemax model, actual M2 beam dia = 3167.36
         m2pupil = makegmtpupil(dx=m2shift*fldang)
         m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) +
-                             makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth,segdist=8.7+m2cyloff) +
+                             makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth,segdist=8.7+m2cyloff2017) +
                              circle(npix,3308.2 / 3167.36 * (8.7*2+Dpri) / 2. , m2shift*fldang,0,pupilscale),
                              1.0) - m2pupil
         m2bkg   = m2skirt + m2pupil * (1-m2refl)
@@ -289,7 +291,7 @@ for fldang in fldlist:
         # Hexagon with the corners trimmed off
         m2pupil = makegmtpupil(dx=m2shift*fldang)
         m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) +
-                             makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth,segdist=8.7+m2cyloff) +
+                             makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth,segdist=8.7+m2cyloff2017) +
                              hex(11.73*2/sqrt(3),dx=m2shift*fldang) * hex(12.90*2/sqrt(3),dx=m2shift*fldang,ang=90), 1) - m2pupil
         m2bkg   = m2skirt + m2pupil * (1-m2refl)
 
