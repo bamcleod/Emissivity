@@ -43,7 +43,7 @@ parser.add_option("--wave",    type="float", dest="wave"      , default=2.4e-6, 
 parser.add_option("--slitwid", type="float", dest="slitwid"   , default=0.5,    help="units=arcsec default=%default")
 parser.add_option("--fldang",  type="float", dest="fldang"    , default=0.0,    help="units=arcmin default=%default")
 
-parser.add_option("--m2type",  type="string",dest="m2type"    , default="base", help="options: base,cyl,tallcyl,bigm2,filledcyl  default=%default")
+parser.add_option("--m2type",  type="string",dest="m2type"    , default="base", help="options: base,cyl,tallcyl,bigm2,filledcyl,hex  default=%default")
 
 parser.add_option("--loopvar", type="string",dest="loopvar"   , default="lyotsegrad", help="options: " + ",".join(validloops)+" default=%default")
 parser.add_option("--loopmin", type="float", dest="loopmin"   , default=3.7,    help="default=%default")
@@ -86,7 +86,7 @@ if loopvar=="none":
     none=0
 elif not loopvar in validloops:
     sys.exit("Error: loopvar must be one of "+" ".join(validloops))
-    
+
 
 deltaphi=30
 pupilscale = 24  # pixels / meter
@@ -120,6 +120,17 @@ def circle (npix, r0, x0=0, y0=0, scale=1):
     c[c>1] = 1
     return c
 
+# cornerdist: radius of the corner
+# ang: angle of hexagon in degrees. 0 means corners on y axis
+# dx, dy: offset of the center
+# Uses global y,x arrays
+def hex(cornerdist, ang=0, dx=0, dy=0):
+    xx = (x+dx) * cos(radians(ang)) + (y+dy) * sin(radians(ang))
+    yy = (y+dy) * cos(radians(ang)) - (x+dx) * sin(radians(ang))
+    hbool = (abs(xx) < cornerdist * sqrt(3) / 2) * (abs(yy) < cornerdist - tan(radians(30)) * abs(xx))
+    h = np.zeros((npix,npix))
+    h[hbool] = 1.0
+    return h
 #
 # Makes a GMT pupil shape approximated by 7 circles.
 # (real pupil has elliptical off-axis segments and various obstructions
@@ -144,7 +155,7 @@ def makegmtpupil(rseg=Dpri/2, dx=0, dy=0, segdist=8.7):
         pupil += circle(npix,rout,x0,y0,pupilscale)
     return np.minimum(pupil,1.0)
 
-# 
+#
 # Makes a set of ds9 regions in the shape of the GMT pupil
 #
 def makegmtpupil_ds9(rseg=Dpri/2, dx=0, dy=0, segdist=8.7):
@@ -181,7 +192,7 @@ def SlitDiffract(pupil):
 
 ######
 # OK, lets get to work now
-######    
+######
 
 #
 # Print the header of our output file
@@ -206,7 +217,7 @@ print tableheader
 #
 # Define the M1 pupil shape
 #
-m1pupil = makegmtpupil() 
+m1pupil = makegmtpupil()
 
 #
 # The area outside the M1 pupil has emissivity = 1
@@ -219,11 +230,11 @@ m1struc = 1 - m1pupil
 for loopval in np.arange(loopmin, loopmax + 1.e-9, loopstp):
 
     globals()[loopvar] = loopval
-    
+
     m2pupil = makegmtpupil(dx=m2shift*fldang)
 
     m2strucwidth = m2skirt * m1m2 # Width of high-emissivity annulus surrounding M2 segments, referenced to entrance pupil
-    # 
+    #
     # Make the correct M2 geometry for one of the various cases under consideration
     #
     if m2type=="base":
@@ -247,10 +258,10 @@ for loopval in np.arange(loopmin, loopmax + 1.e-9, loopstp):
         m2obscure = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2strucwidth) + makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2strucwidth,segdist=8.7+m2cyloff), 1.0)
 
     elif m2type=="tallcyl": # Tall Cylindrical reference bodies
-        m2obscure = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2strucwidth) + 
-                             makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2strucwidth,segdist=8.7+m2cyloff) + 
+        m2obscure = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2strucwidth) +
+                             makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2strucwidth,segdist=8.7+m2cyloff) +
                              makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2strucwidth,segdist=8.7+m2topcyloff),
-                             1.0) 
+                             1.0)
 
     elif m2type=="bigm2":  # Monolithic M2
         # M2 is one large circle, sized just large enough to go 10 arcmin off axis without vignetting
@@ -259,20 +270,23 @@ for loopval in np.arange(loopmin, loopmax + 1.e-9, loopstp):
 
     elif m2type=="bigref": # Monolithic circular reference body
         # Segmented M2, but surrounded by a large high emissivity circle
-        m2obscure = circle(npix,(8.4+2*8.7+10*m2shift)/2,0,0,pupilscale) 
+        m2obscure = circle(npix,(8.4+2*8.7+10*m2shift)/2,0,0,pupilscale)
 
-    elif m2type=="filledcyl": # AdOptica monolithic reference body 
-        m2obscure = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2strucwidth) + 
+    elif m2type=="filledcyl": # AdOptica monolithic reference body
+        m2obscure = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2strucwidth) +
                              makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2strucwidth,segdist=8.7+m2cyloff) +
-                             circle(npix,9.5,m2shift*fldang,0,pupilscale), 
-                             1.0) 
+                             circle(npix,9.5,m2shift*fldang,0,pupilscale),
+                             1.0)
 
     elif m2type=="bigfilledcyl":  # AdOptical monolithic reference body + Oversize the m2 segments by 10mm radius
-        m2obscure = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2strucwidth+.010*m1m2) + 
+        m2obscure = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2strucwidth+.010*m1m2) +
                              makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2strucwidth+.010*m1m2,segdist=8.7+m2cyloff) +
-                             circle(npix,9.5,m2shift*fldang,0,pupilscale), 
-                             1.0) 
-
+                             circle(npix,9.5,m2shift*fldang,0,pupilscale),
+                             1.0)
+    elif m2type=="hex":
+        # Hexagon with the corners trimmed off
+        m2obscure = hex(11.73*2/sqrt(3),dx=m2shift*fldang) * hex(12.90*2/sqrt(3),dx=m2shift*fldang,ang=90)
+        savefits(root,"m2obscure")
 
     # Here we include the direct view of the sky outside of M2
     #
@@ -290,7 +304,7 @@ for loopval in np.arange(loopmin, loopmax + 1.e-9, loopstp):
     m2obscure_demag[left:left+newsizey,left:left+newsizex] = zoomed
 
     m1emiss = m1pupil * m2pupil
-    
+
     thrutel = m1pupil * m2pupil * ( 1 - m2obscure_demag )
 
     m2emiss = m2pupil
@@ -310,7 +324,7 @@ for loopval in np.arange(loopmin, loopmax + 1.e-9, loopstp):
 
     # Save the shape of the stop as a ds9 region file
     with open(root+"lyot.reg","w") as f: f.write(makegmtpupil_ds9(rseg=lyotsegrad))
-    
+
     # Define the shape of the cold stop
     #
     lyot = makegmtpupil(rseg=lyotsegrad)
@@ -318,7 +332,7 @@ for loopval in np.arange(loopmin, loopmax + 1.e-9, loopstp):
 
     # Clip the blurred pupil plane images by the cold stop
     # This is the signal that gets through the instrument cold stop
-    thrutel_fp = lyot * SlitDiffract(thrutel) 
+    thrutel_fp = lyot * SlitDiffract(thrutel)
 
     # And these are the various sources of background
     m1emiss_fp = lyot * SlitDiffract(m1emiss)
@@ -346,4 +360,3 @@ for loopval in np.arange(loopmin, loopmax + 1.e-9, loopstp):
         for f in fitslist:
             savefits(root,f)
         saveimgs = 0
-

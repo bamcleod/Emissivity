@@ -42,8 +42,8 @@ parser.add_option("-m", type="string",dest="m2type"     , default="base", help="
 parser.add_option("-l", type="string",dest="looptype"   , default="lyot", help="default=%default")
 parser.add_option("-r", type="string",dest="root"       , default="em_",  help="default=%default")
 parser.add_option("--lyot",type="float", dest="lyotsize", default="4.15", help="default=%default")
-parser.add_option("--saveimgs",  action="store_true",  dest="saveimgs"   , default="False", help="default=%default")
-parser.add_option("--nonorm",    action="store_true",  dest="nonorm"     , default="False", help="default=%default")
+parser.add_option("--saveimgs",  action="store_true",  dest="saveimgs"   , default=False, help="default=%default")
+parser.add_option("--nonorm",    action="store_true",  dest="nonorm"     , default=False, help="default=%default")
 
 (options,args) = parser.parse_args()
 
@@ -74,7 +74,7 @@ else:
     # No loop
     fldlist=[fldang]
     lyotlist=[lyotsize]
-    
+
 deltaphi=30
 pupilscale = 24  # pixels / meter
 
@@ -109,8 +109,20 @@ def circle (npix, r0, x0=0, y0=0, scale=1):
     c[c>1] = 1
     return c
 
+# cornerdist: radius of the corner
+# ang: angle of hexagon in degrees. 0 means corners on y axis
+# dx, dy: offset of the center
+# Uses global y,x arrays
+def hex(cornerdist, ang=0, dx=0, dy=0):
+    xx = (x+dx) * cos(radians(ang)) + (y+dy) * sin(radians(ang))
+    yy = (y+dy) * cos(radians(ang)) - (x+dx) * sin(radians(ang))
+    hbool = (abs(xx) < cornerdist * sqrt(3) / 2) * (abs(yy) < cornerdist - tan(radians(30)) * abs(xx))
+    h = np.zeros((npix,npix))
+    h[hbool] = 1.0
+    return h
 #
 # Makes a GMT pupil shape approximated by 7 circles.
+# (real pupil has elliptical off-axis segments and various obstructions
 #
 def makegmtpupil(rseg=Dpri/2, dx=0, dy=0, segdist=8.7):
 
@@ -132,7 +144,7 @@ def makegmtpupil(rseg=Dpri/2, dx=0, dy=0, segdist=8.7):
         pupil += circle(npix,rout,x0,y0,pupilscale)
     return pupil
 
-# 
+#
 # Makes a set of ds9 regions in the shape of the GMT pupil
 #
 def makegmtpupil_ds9(rseg=Dpri/2, dx=0, dy=0, segdist=8.7):
@@ -166,7 +178,7 @@ def savefits(root,name):
 
 ######
 # OK, lets get to work now
-######    
+######
 
 #
 # Print the header of our output file
@@ -186,8 +198,8 @@ m1pupil = makegmtpupil()
 m1bkg = m1pupil * (1-m1refl) +  (1-m1pupil)
 
 for fldang in fldlist:
-    
-    # 
+
+    #
     # Make the correct M2 geometry for one of the various cases under consideration
     #
     if m2type=="base":
@@ -211,8 +223,8 @@ for fldang in fldlist:
 
     elif m2type=="tallcyl": # Tall Cylindrical reference bodies
         m2pupil = makegmtpupil(dx=m2shift*fldang)
-        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) + 
-                             makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth,segdist=8.7+m2cyloff) + 
+        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) +
+                             makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth,segdist=8.7+m2cyloff) +
                              makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth,segdist=8.7+m2topcyloff),
                              1.0) - m2pupil
         m2bkg   = m2skirt + m2pupil * (1-m2refl)
@@ -228,43 +240,59 @@ for fldang in fldlist:
         m2skirt = circle(npix,(8.4+2*8.7+10*m2shift)/2,0,0,pupilscale) - m2pupil
         m2bkg   = m2skirt + m2pupil * (1-m2refl)
 
-    elif m2type=="filledcyl": # AdOptica monolithic reference body 
+    elif m2type=="filledcyl": # AdOptica monolithic reference body
         m2pupil = makegmtpupil(dx=m2shift*fldang)
-        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) + 
+        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) +
                              makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth,segdist=8.7+m2cyloff) +
-                             circle(npix,9.5,m2shift*fldang,0,pupilscale), 
+                             circle(npix,9.5,m2shift*fldang,0,pupilscale),
                              1.0) - m2pupil
         m2bkg   = m2skirt + m2pupil * (1-m2refl)
 
     elif m2type=="bigfilledcyl":  # AdOptical monolithic reference body + Oversize the m2 segments by 10mm radius
         m2pupil = makegmtpupil(dx=m2shift*fldang,rseg=rseg+.010*8.4)
-        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth+.010*8.4) + 
+        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth+.010*8.4) +
                              makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth+.010*8.4,segdist=8.7+m2cyloff) +
-                             circle(npix,9.5,m2shift*fldang,0,pupilscale), 
+                             circle(npix,9.5,m2shift*fldang,0,pupilscale),
                              1.0) - m2pupil
         m2bkg   = m2skirt + m2pupil * (1-m2refl)
 
     elif m2type=="bighex3.7": # All segments on their own piezo hexapods attached to big master hexapod modeled as 3.7m disk
         m2pupil = makegmtpupil(dx=m2shift*fldang)
-        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) + 
+        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) +
                              makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth,segdist=8.7+m2cyloff) +
-                             circle(npix,3.6/2.*8.4,m2shift*fldang,0,pupilscale), 
+                             circle(npix,3.7/2.*8.4,m2shift*fldang,0,pupilscale),
                              1.0) - m2pupil
         m2bkg   = m2skirt + m2pupil * (1-m2refl)
     elif m2type=="bighex3.6": # All segments on their own piezo hexapods attached to big master hexapod modeled as 3.6m disk
         m2pupil = makegmtpupil(dx=m2shift*fldang)
-        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) + 
+        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) +
                              makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth,segdist=8.7+m2cyloff) +
-                             circle(npix,3.6/2.*8.4,m2shift*fldang,0,pupilscale), 
+                             circle(npix,3.6/2.*8.4,m2shift*fldang,0,pupilscale),
                              1.0) - m2pupil
         m2bkg   = m2skirt + m2pupil * (1-m2refl)
     elif m2type=="bighex3.0": # All segments on their own piezo hexapods attached to big master hexapod modeled as 3.0m disk
         m2pupil = makegmtpupil(dx=m2shift*fldang)
-        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) + 
+        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) +
                              makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth,segdist=8.7+m2cyloff) +
-                             circle(npix,3.0/2.*8.4,m2shift*fldang,0,pupilscale), 
+                             circle(npix,3.0/2.*8.4,m2shift*fldang,0,pupilscale),
                              1.0) - m2pupil
         m2bkg   = m2skirt + m2pupil * (1-m2refl)
+    elif m2type=="round2017": # Round baffle with diameter 3308.2;  From non-segmented Zemax model, actual M2 beam dia = 3167.36
+        m2pupil = makegmtpupil(dx=m2shift*fldang)
+        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) +
+                             makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth,segdist=8.7+m2cyloff) +
+                             circle(npix,3308.2 / 3167.36 * (8.7*2+Dpri) / 2. , m2shift*fldang,0,pupilscale),
+                             1.0) - m2pupil
+        m2bkg   = m2skirt + m2pupil * (1-m2refl)
+
+    elif m2type=="hex2017":
+        # Hexagon with the corners trimmed off
+        m2pupil = makegmtpupil(dx=m2shift*fldang)
+        m2skirt = np.minimum(makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth) +
+                             makegmtpupil(dx=m2shift*fldang,rseg=rseg+m2skirtwidth,segdist=8.7+m2cyloff) +
+                             hex(11.73*2/sqrt(3),dx=m2shift*fldang) * hex(12.90*2/sqrt(3),dx=m2shift*fldang,ang=90), 1) - m2pupil
+        m2bkg   = m2skirt + m2pupil * (1-m2refl)
+
 
     # Here we include the direct view of the sky outside of M2
     #
@@ -273,7 +301,7 @@ for fldang in fldlist:
     # The signal in the pupil plane is the product of the M1 and M2 pupil images
     #
     sig = m1pupil * m2pupil
-    
+
     # Combine the emissivities of M1 seen in M2, M2 seen directly, and sky seen in M1+M2
     #
     bkg  = m2pupil * (1 - (1-m1bkg)*(1-m2bkg)) + (1-m2pupil) * m2bkg  + sig * outbkg * (1-m1bkg) * (1-m2bkg)
@@ -305,7 +333,7 @@ for fldang in fldlist:
 
     # Save the shape of the stop as a ds9 region file
     with open(root+"lyot.reg","w") as f: f.write(makegmtpupil_ds9(rseg=lyotsize))
-    
+
     # Clip the blurred pupil plane images by the cold stop
     # This is the background and the signal that gets through the instrument cold stop
     bkglyot=bkgconv * lyot
@@ -316,7 +344,7 @@ for fldang in fldlist:
         fitslist=["m2bkg", "m1bkg", "bkg", "sig", "slit", "PSFslit", "sigconv", "bkgconv", "bkglyot", "siglyot"]
         for f in fitslist:
             savefits(root,f)
-    
+
     # Compute the normalization values for the S/N
     if nonorm:
         # Don't normalize
@@ -326,13 +354,13 @@ for fldang in fldlist:
     else:
         # Normalize to what you would get without slit diffraction
         sigref=m1pupil.sum()
-        bkgref=m1pupil.sum() * (1 - m1refl*m2refl + outbkg*m1refl*m2refl) 
+        bkgref=m1pupil.sum() * (1 - m1refl*m2refl + outbkg*m1refl*m2refl)
         snrref=sigref / sqrt(bkgref)
 
     for lyotradius in lyotlist:
 
         lyotmask = makegmtpupil(rseg=lyotradius)
-        
+
         # Add up the background going through the cold stop
         bkg = (bkgconv * lyotmask).sum()
 
